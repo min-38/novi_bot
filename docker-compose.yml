@@ -1,0 +1,7 @@
+services:
+  novi-bot:
+    build: .
+    container_name: novi_bot
+    env_file:
+      - .env
+    restart: unless-stopped

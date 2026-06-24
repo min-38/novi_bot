@@ -1,0 +1,37 @@
+# 환경 변수 / 비밀
+.env*
+!.env.example
+.cache
+.spotify_cache
+.cache-*
+
+# 파이썬
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# yt-dlp / 임시 미디어 캐시
+*.part
+*.webm
+*.m4a
+*.mp3
+*.opus
+
+# 로그
+*.log
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
