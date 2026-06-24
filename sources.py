@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import os
 import re
 from dataclasses import dataclass
 
@@ -45,6 +46,13 @@ YTDL_OPTS = {
     "source_address": "0.0.0.0",
     "skip_download": True,
 }
+
+# 쿠키 파일이 있으면 yt-dlp 에 넘긴다 (클라우드 IP 봇 차단 우회).
+if config.COOKIES_FILE and os.path.isfile(config.COOKIES_FILE):
+    YTDL_OPTS["cookiefile"] = config.COOKIES_FILE
+    print(f"[sources] yt-dlp 쿠키 파일 사용: {config.COOKIES_FILE}")
+else:
+    print("[sources] 쿠키 파일 없음 — 클라우드에서 YouTube 봇 차단이 발생할 수 있음")
 
 FFMPEG_OPTS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",

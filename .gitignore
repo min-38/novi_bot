@@ -4,6 +4,7 @@
 .cache
 .spotify_cache
 .cache-*
+cookies.txt
 
 # 파이썬
 .venv/

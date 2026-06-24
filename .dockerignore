@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 .git/
 .env*
+cookies.txt
 README.md

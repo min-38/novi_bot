@@ -25,6 +25,10 @@ DB_NAME = _get("Database__Name", "novi_db")
 
 ENVIRONMENT = _get("ASPNETCORE_ENVIRONMENT", "Production")
 
+# yt-dlp 쿠키 파일 (클라우드/데이터센터 IP 에서 YouTube 봇 차단 우회용)
+# Netscape 형식. 파일이 존재할 때만 사용된다.
+COOKIES_FILE = _get("Ytdlp__CookiesFile", "cookies.txt")
+
 SPOTIFY_ENABLED = bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)
 
 

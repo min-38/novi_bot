@@ -61,7 +61,26 @@ ASPNETCORE_ENVIRONMENT=Production
 EOF
 ```
 
-### 3) 실행
+### 3) `cookies.txt` 준비 (클라우드 필수)
+
+클라우드/VM의 데이터센터 IP에서는 YouTube가 yt-dlp를 봇으로 간주해 차단하는 경우가 많습니다(`Sign in to confirm you're not a bot`). 이를 우회하려면 YouTube 쿠키를 Netscape 형식으로 내보낸 `cookies.txt`가 필요합니다.
+
+1. 로컬 브라우저에서 YouTube에 로그인 (전용/부계정 권장)
+2. 쿠키 내보내기 확장 프로그램 사용 — 예: "Get cookies.txt LOCALLY" (Chrome/Firefox). youtube.com 접속 상태에서 내보내면 Netscape 형식 `cookies.txt`가 생성됩니다.
+3. 이 파일을 VM의 프로젝트 루트(`novi_bot/cookies.txt`)에 둡니다.
+
+```bash
+# 예: 로컬에서 만든 cookies.txt 를 VM 으로 복사
+scp cookies.txt <user>@<vm-host>:~/novi_bot/cookies.txt
+```
+
+- `cookies.txt`는 `.gitignore` 처리되어 커밋되지 않으며, Compose가 컨테이너의 `/app/cookies.txt`로 마운트합니다.
+- 파일이 있으면 자동 사용되고, 없으면 쿠키 없이 동작합니다(로컬에선 보통 문제없음).
+- 쿠키는 만료될 수 있으니, 차단이 다시 발생하면 새로 내보내 교체하세요. 경로를 바꾸려면 `.env`에 `Ytdlp__CookiesFile=/경로/cookies.txt`를 지정합니다.
+
+> ⚠️ Compose 볼륨 마운트 특성상, 실행 **전에** 호스트에 `cookies.txt`가 존재해야 합니다. 없으면 Docker가 같은 이름의 빈 디렉터리를 만들어 버립니다. 쿠키를 쓰지 않을 거라면 `docker-compose.yml`의 해당 `volumes` 줄을 지우세요.
+
+### 4) 실행
 
 **방법 A — Docker Compose (권장)**
 
@@ -82,11 +101,16 @@ docker compose up -d --build
 
 ```bash
 docker build -t novi_bot .
-docker run -d --name novi_bot --env-file .env --restart unless-stopped novi_bot
+docker run -d --name novi_bot \
+  --env-file .env \
+  -v "$PWD/cookies.txt:/app/cookies.txt" \
+  --restart unless-stopped novi_bot
 
 docker logs -f novi_bot           # 로그 보기
 docker rm -f novi_bot             # 중지/제거
 ```
+
+(쿠키를 쓰지 않으면 `-v` 줄은 생략하세요.)
 
 ### 참고
 - 이 봇은 외부로 음성 연결만 하므로 **포트 개방(인바운드)이 필요 없습니다.**

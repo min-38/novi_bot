@@ -4,4 +4,7 @@ services:
     container_name: novi_bot
     env_file:
       - .env
+    volumes:
+      # 클라우드 IP 의 YouTube 봇 차단 우회용 쿠키. 실행 전 호스트에 파일이 있어야 한다.
+      - ./cookies.txt:/app/cookies.txt
     restart: unless-stopped
