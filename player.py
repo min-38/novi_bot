@@ -5,7 +5,18 @@ import asyncio
 
 import discord
 
+import db
 from sources import FFMPEG_OPTS, Track, resolve_stream_url
+
+# 티어 버튼 스타일 (S=초록 계열 강조, 낮을수록 회색)
+_TIER_STYLE = {
+    "S": discord.ButtonStyle.success,
+    "A": discord.ButtonStyle.success,
+    "B": discord.ButtonStyle.primary,
+    "C": discord.ButtonStyle.primary,
+    "D": discord.ButtonStyle.secondary,
+    "F": discord.ButtonStyle.secondary,
+}
 
 IDLE_TIMEOUT = 300  # 큐가 비면 5분 뒤 음성 채널에서 나간다.
 
@@ -47,13 +58,21 @@ def build_now_playing_embed(track: Track) -> discord.Embed:
 
 
 class NowPlayingControls(discord.ui.View):
-    """현재 재생 곡 메시지에 붙는 조작 버튼."""
+    """현재 재생 곡 메시지에 붙는 조작 버튼 + 티어 평가 버튼.
 
-    def __init__(self, player: "GuildPlayer"):
+    티어 버튼은 메시지에 표시된 그 곡(track)에 고정으로 바인딩된다. 곡이 끝나
+    다음 곡이 시작돼도 이 버튼은 원래 곡을 평가한다.
+    """
+
+    def __init__(self, player: "GuildPlayer", track: Track):
         super().__init__(timeout=None)
         self.player = player
+        self.track = track
+        # DB 가 켜져 있을 때만 티어 평가 버튼을 붙인다.
+        if db.enabled():
+            self._add_tier_buttons()
 
-    @discord.ui.button(label="일시정지/재생", emoji="⏯️", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="일시정지/재생", emoji="⏯️", style=discord.ButtonStyle.primary, row=0)
     async def toggle_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = self.player.voice
         if not vc or not (vc.is_playing() or vc.is_paused()):
@@ -67,7 +86,7 @@ class NowPlayingControls(discord.ui.View):
             vc.pause()
             await interaction.response.send_message("⏸️ 잠시 멈추어 두었사옵니다.")
 
-    @discord.ui.button(label="건너뛰기", emoji="⏭️", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="건너뛰기", emoji="⏭️", style=discord.ButtonStyle.secondary, row=0)
     async def skip_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         vc = self.player.voice
         if not vc or not vc.is_playing():
@@ -77,6 +96,31 @@ class NowPlayingControls(discord.ui.View):
         title = self.player.current.title if self.player.current else "이 곡"
         vc.stop()
         await interaction.response.send_message(f"⏭️ 『{title}』 건너뛰었사옵니다.")
+
+    def _add_tier_buttons(self):
+        # 한 행에 5개까지 → S~D 한 줄(row 1), F 다음 줄(row 2)
+        for idx, tier in enumerate(db.TIERS):
+            row = 1 if idx < 5 else 2
+            btn = discord.ui.Button(
+                label=tier, style=_TIER_STYLE.get(tier, discord.ButtonStyle.secondary), row=row
+            )
+            btn.callback = self._make_rate_callback(tier)
+            self.add_item(btn)
+
+    def _make_rate_callback(self, tier: str):
+        async def callback(interaction: discord.Interaction):
+            track = self.track
+            await db.set_rating(track.key, track.title, interaction.user.id, tier)
+            song = await db.get_song(track.key)
+            extra = ""
+            if song:
+                extra = f" 지금 이 곡은 **{song['tier']}티어**({song['votes']}표)이옵니다."
+            await interaction.response.send_message(
+                f"『{track.title}』 에 **{tier}티어**를 매겨 두었사옵니다.{extra}",
+                ephemeral=True,
+            )
+
+        return callback
 
 
 class GuildPlayer:
@@ -162,7 +206,7 @@ class GuildPlayer:
             await self.text_channel.send(
                 content="🎵 이제 한 곡 틀어 올리옵니다.",
                 embed=embed,
-                view=NowPlayingControls(self),
+                view=NowPlayingControls(self, track),
             )
         except Exception:
             pass

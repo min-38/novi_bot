@@ -16,8 +16,18 @@
 | `/queue remove <번호>` | 큐에서 특정 곡 삭제 |
 | `/queue clear` | 큐 비우기 |
 | `/leave` | 음성 채널에서 나가기 |
+| `/tier [곡]` | 곡의 평가(티어)·표 분포 보기 (비우면 현재 곡) |
+| `/tierlist` | 평가된 곡을 티어별로 모은 티어표 보기 |
 
-재생 중 메시지의 **⏯️ / ⏭️ 버튼**으로도 일시정지·재생·건너뛰기를 할 수 있습니다. 큐가 5분간 비어 있으면 자동으로 음성 채널에서 나갑니다.
+재생 중 메시지의 **⏯️ / ⏭️ 버튼**으로 일시정지·재생·건너뛰기를 할 수 있습니다. 큐가 5분간 비어 있으면 자동으로 음성 채널에서 나갑니다.
+
+### 곡 평가 (티어)
+
+곡이 재생되면 now-playing 메시지에 **티어 버튼(S · A · B · C · D · F)** 이 함께 표시됩니다. 버튼을 누르면 그 곡에 티어를 매기며, 한 사람당 곡별 1표(다시 누르면 갱신)입니다. 여러 사람의 표를 점수(S=5 … F=0)로 환산해 평균을 내고, 가장 가까운 티어를 대표 티어로 산출합니다.
+
+- 곡 식별은 **Spotify 곡 ID** 기준이라, 같은 곡을 다른 YouTube 영상으로 틀어도 평가가 합쳐집니다.
+- 평가 데이터는 **Neon PostgreSQL**에 저장되어 봇 재시작·재배포 후에도 유지됩니다.
+- DB 연결이 없으면 평가 버튼·명령은 자동으로 비활성화되고, 음악 기능은 정상 동작합니다.
 
 ## 환경 변수 (`.env`)
 
@@ -28,7 +38,8 @@
 | `Discord__Token` | ✅ | 디스코드 봇 토큰 |
 | `Spotify__ClientId` | ✅ | Spotify 앱 Client ID |
 | `Spotify__ClientSecret` | ✅ | Spotify 앱 Client Secret |
-| `Database__*` | ❌ | Neon PostgreSQL (현재 미사용) |
+| `Database__Host` / `Database__User` / `Database__Password` | ⬜ | Neon PostgreSQL. 있으면 곡 평가(티어) 기능 활성화. 없으면 음악만 동작 |
+| `Database__Port` / `Database__Name` | ❌ | 기본값 `5432` / `novi_db` |
 | `ASPNETCORE_ENVIRONMENT` | ❌ | 실행 환경 |
 
 > `.env`는 `.gitignore` 처리되어 git에 올라가지 않습니다. 배포하는 VM에서 직접 만들어야 합니다.
@@ -121,8 +132,10 @@ docker rm -f novi_bot             # 중지/제거
 
 ## 구조
 
-- `bot.py` — 진입점. 봇 기동 및 슬래시 명령 등록
+- `bot.py` — 진입점. 봇 기동, DB 초기화, 슬래시 명령 등록
 - `config.py` — `.env`(`.NET` 식 `__` 키) 로딩
 - `sources.py` — Spotify 확인 + yt-dlp로 곡/메타데이터 해석, 자동완성
-- `player.py` — 길드별 큐와 재생 루프, 재생 임베드·버튼
-- `cogs/music.py` — 슬래시 명령 (노비 말투 응답)
+- `player.py` — 길드별 큐와 재생 루프, 재생 임베드, 조작·티어 평가 버튼
+- `db.py` — Neon PostgreSQL 평가(티어) 저장 계층
+- `cogs/music.py` — 음악 슬래시 명령 (노비 말투 응답)
+- `cogs/rating.py` — 평가 조회 명령(`/tier`, `/tierlist`)

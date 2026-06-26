@@ -93,6 +93,15 @@ class Track:
         h, m = divmod(m, 60)
         return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
 
+    @property
+    def key(self) -> str:
+        """평가 저장용 안정적인 곡 식별키 (Spotify 곡 ID 우선).
+
+        모든 곡이 Spotify 를 거치므로 Spotify URL 이 가장 안정적인 식별자다.
+        (같은 곡이라도 YouTube 영상은 여러 개일 수 있다.)
+        """
+        return self.spotify_url or self.webpage_url or self.search_query
+
 
 def _spotify_item_fields(item: dict) -> dict:
     """Spotify 트랙 항목에서 필요한 정보를 추출한다."""
