@@ -71,15 +71,21 @@ class Rating(commands.Cog):
                     ephemeral=True,
                 )
 
+        sq = db.TIER_EMOJI.get(info["tier"], "")
         embed = discord.Embed(
-            title=f"{info['tier']}티어 — {info['title']}",
-            description=f"평균 점수 **{info['avg_score']:.2f}** / 5 · 총 **{info['votes']}표**",
+            title=f"{sq} {info['tier']}티어 · {info['title']}",
+            description=f"평균 **{info['avg_score']:.2f}** / 5점　·　총 **{info['votes']}표**",
             color=_TIER_COLOR.get(info["tier"], 0x9B59B6),
         )
         if info.get("dist"):
             dist = info["dist"]
-            line = "  ".join(f"{t}: {dist.get(t, 0)}" for t in db.TIERS)
-            embed.add_field(name="표 분포", value=line, inline=False)
+            # 표가 있는 티어를 막대처럼 표시
+            lines = []
+            for t in db.TIERS:
+                n = dist.get(t, 0)
+                if n:
+                    lines.append(f"{db.TIER_EMOJI[t]} `{t}`　{'▰' * n} {n}")
+            embed.add_field(name="표 분포", value="\n".join(lines) or "—", inline=False)
         await interaction.response.send_message(embed=embed)
 
     # ================= /tierlist =================
@@ -97,18 +103,24 @@ class Rating(commands.Cog):
         # 티어별로 묶기
         by_tier: dict[str, list[str]] = {t: [] for t in db.TIERS}
         for s in songs:
-            by_tier[s["tier"]].append(f"{s['title']} ({s['votes']}표)")
+            by_tier[s["tier"]].append(f"{s['title']} `{s['votes']}표`")
 
-        embed = discord.Embed(title="🏆 티어표", color=0xF1C40F)
+        embed = discord.Embed(
+            title="🏆 노비가 기록한 티어표",
+            description=f"평가된 곡 **{len(songs)}**곡",
+            color=0xF1C40F,
+        )
         for t in db.TIERS:
             items = by_tier[t]
+            sq = db.TIER_EMOJI[t]
             if not items:
+                embed.add_field(name=f"{sq} {t}", value="ㅤ", inline=False)
                 continue
             shown = items[:10]
             value = "\n".join(shown)
             if len(items) > 10:
                 value += f"\n…그 외 {len(items) - 10}곡"
-            embed.add_field(name=f"{t}티어", value=value, inline=False)
+            embed.add_field(name=f"{sq} {t}", value=value, inline=False)
         await interaction.followup.send(embed=embed)
 
 

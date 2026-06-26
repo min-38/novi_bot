@@ -12,6 +12,8 @@ import config
 # 높은 티어가 앞에 오도록 정렬된 순서
 TIERS = ["S", "A", "B", "C", "D", "F"]
 TIER_SCORE = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "F": 0}
+# 티어 색 사각형 (UI 공용)
+TIER_EMOJI = {"S": "🟥", "A": "🟧", "B": "🟨", "C": "🟩", "D": "🟦", "F": "⬜"}
 
 _pool: asyncpg.Pool | None = None
 
@@ -81,10 +83,18 @@ async def close() -> None:
         _pool = None
 
 
-async def set_rating(song_key: str, title: str, user_id: int, tier: str) -> None:
-    """사용자의 곡 평가를 추가/갱신한다 (곡+사용자당 1표)."""
+async def set_rating(song_key: str, title: str, user_id: int, tier: str) -> str | None:
+    """사용자의 곡 평가를 추가/갱신한다 (곡+사용자당 1표).
+
+    이전에 매긴 티어를 반환한다. 처음 매기는 경우 None.
+    """
     assert _pool is not None
     async with _pool.acquire() as con:
+        old_tier = await con.fetchval(
+            "SELECT tier FROM song_ratings WHERE song_key = $1 AND user_id = $2;",
+            song_key,
+            user_id,
+        )
         await con.execute(
             """
             INSERT INTO song_ratings (song_key, user_id, title, tier, updated_at)
@@ -99,6 +109,7 @@ async def set_rating(song_key: str, title: str, user_id: int, tier: str) -> None
             title,
             tier,
         )
+        return old_tier
 
 
 async def get_song(song_key: str) -> dict | None:

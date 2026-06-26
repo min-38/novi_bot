@@ -90,7 +90,9 @@ class Music(commands.Cog):
         player = self._ensure_player(interaction)
         player.voice = vc
 
+        icon = interaction.user.display_avatar.url
         for t in tracks:
+            t.requester_icon = icon
             player.add(t)
 
         if len(tracks) == 1:

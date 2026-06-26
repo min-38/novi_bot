@@ -71,6 +71,7 @@ class Track:
     title: str  # 표시 이름 (재생 전엔 Spotify, 재생 후엔 YouTube 제목)
     requester: str
     search_query: str  # YouTube 검색어 (가수 제목)
+    requester_icon: str | None = None  # 요청자 아바타 URL (임베드 꼬리말용)
 
     # Spotify 에서 확인한 정보
     spotify_title: str | None = None

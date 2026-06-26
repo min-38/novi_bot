@@ -8,15 +8,8 @@ import discord
 import db
 from sources import FFMPEG_OPTS, Track, resolve_stream_url
 
-# 티어 버튼 스타일 (S=초록 계열 강조, 낮을수록 회색)
-_TIER_STYLE = {
-    "S": discord.ButtonStyle.success,
-    "A": discord.ButtonStyle.success,
-    "B": discord.ButtonStyle.primary,
-    "C": discord.ButtonStyle.primary,
-    "D": discord.ButtonStyle.secondary,
-    "F": discord.ButtonStyle.secondary,
-}
+# 티어 색 사각형은 db.TIER_EMOJI 를 공용으로 쓴다.
+_TIER_EMOJI = db.TIER_EMOJI
 
 IDLE_TIMEOUT = 300  # 큐가 비면 5분 뒤 음성 채널에서 나간다.
 
@@ -31,29 +24,48 @@ def _fmt_views(n: int | None) -> str | None:
     return f"{n:,}회"
 
 
-def build_now_playing_embed(track: Track) -> discord.Embed:
-    """현재 재생 곡의 YouTube 메타데이터로 임베드를 만든다."""
+def build_now_playing_embed(track: Track, rating: dict | None = None) -> discord.Embed:
+    """현재 재생 곡의 메타데이터·평가 현황으로 임베드를 만든다."""
     embed = discord.Embed(
-        title=track.title,
+        title=track.title or "재생 중",
         url=track.webpage_url,
-        description="지금 틀고 있는 곡이옵니다.",
         color=0x1DB954,
     )
-    if track.uploader:
-        embed.add_field(name="채널(업로더)", value=track.uploader, inline=True)
-    embed.add_field(name="길이", value=track.duration_str, inline=True)
-    views = _fmt_views(track.view_count)
-    if views:
-        embed.add_field(name="조회수", value=views, inline=True)
+    embed.set_author(name="🎶 지금 재생 중")
+
+    # ── 메타데이터 (한 줄에 나란히) ──
+    embed.add_field(name="🎙️ 채널", value=track.uploader or "—", inline=True)
+    embed.add_field(name="⏱️ 길이", value=track.duration_str, inline=True)
+    embed.add_field(name="👁️ 조회수", value=_fmt_views(track.view_count) or "—", inline=True)
+
+    # ── Spotify 출처 ──
     if track.spotify_artist:
         spo = track.spotify_title or ""
         line = f"{track.spotify_artist} — {spo}".strip(" —")
         if track.spotify_url:
             line = f"[{line}]({track.spotify_url})"
-        embed.add_field(name="Spotify 확인", value=line, inline=False)
-    if track.thumbnail:
-        embed.set_thumbnail(url=track.thumbnail)
-    embed.set_footer(text=f"청하신 나리: {track.requester}")
+        embed.add_field(name="🎧 Spotify", value=line, inline=False)
+
+    # ── 평가 현황 ──
+    if rating:
+        sq = _TIER_EMOJI.get(rating["tier"], "")
+        embed.add_field(
+            name="🏅 현재 평가",
+            value=f"{sq} **{rating['tier']}티어**　·　{rating['votes']}표　·　평균 {rating['avg_score']:.1f}점",
+            inline=False,
+        )
+    else:
+        embed.add_field(
+            name="🏅 평가",
+            value="아직 평가가 없사옵니다. 아래 버튼으로 이 곡의 품계를 매겨 주시옵소서!",
+            inline=False,
+        )
+
+    # ── 앨범아트(없으면 유튜브 썸네일) ──
+    thumb = track.album_art or track.thumbnail
+    if thumb:
+        embed.set_thumbnail(url=thumb)
+    embed.set_footer(text=f"청하신 나리 · {track.requester}", icon_url=track.requester_icon)
     return embed
 
 
@@ -102,7 +114,10 @@ class NowPlayingControls(discord.ui.View):
         for idx, tier in enumerate(db.TIERS):
             row = 1 if idx < 5 else 2
             btn = discord.ui.Button(
-                label=tier, style=_TIER_STYLE.get(tier, discord.ButtonStyle.secondary), row=row
+                label=tier,
+                emoji=_TIER_EMOJI.get(tier),
+                style=discord.ButtonStyle.secondary,
+                row=row,
             )
             btn.callback = self._make_rate_callback(tier)
             self.add_item(btn)
@@ -110,15 +125,24 @@ class NowPlayingControls(discord.ui.View):
     def _make_rate_callback(self, tier: str):
         async def callback(interaction: discord.Interaction):
             track = self.track
-            await db.set_rating(track.key, track.title, interaction.user.id, tier)
+            who = interaction.user.display_name
+            old = await db.set_rating(track.key, track.title, interaction.user.id, tier)
             song = await db.get_song(track.key)
-            extra = ""
+
+            if old is None:
+                head = f"⭐ **{who}** 님이 『**{track.title}**』 에 **{tier}티어**를 매겼사옵니다!"
+            elif old == tier:
+                head = f"**{who}** 님이 『**{track.title}**』 에 그대로 **{tier}티어**를 두었사옵니다."
+            else:
+                head = (
+                    f"🔄 **{who}** 님이 『**{track.title}**』 평가를 "
+                    f"**{old}티어 → {tier}티어**로 바꾸었사옵니다!"
+                )
+            tail = ""
             if song:
-                extra = f" 지금 이 곡은 **{song['tier']}티어**({song['votes']}표)이옵니다."
-            await interaction.response.send_message(
-                f"『{track.title}』 에 **{tier}티어**를 매겨 두었사옵니다.{extra}",
-                ephemeral=True,
-            )
+                tail = f" 이제 이 곡은 **{song['tier']}티어**({song['votes']}표)이옵니다."
+            # 누가 어떻게 매겼는지 모두 보이도록 공개 메시지로 아뢴다.
+            await interaction.response.send_message(head + tail)
 
         return callback
 
@@ -200,8 +224,14 @@ class GuildPlayer:
             pass
 
     async def _announce(self, track: Track):
-        """현재 재생 곡을 메타데이터·버튼과 함께 채널에 알린다."""
-        embed = build_now_playing_embed(track)
+        """현재 재생 곡을 메타데이터·평가현황·버튼과 함께 채널에 알린다."""
+        rating = None
+        if db.enabled():
+            try:
+                rating = await db.get_song(track.key)
+            except Exception:
+                rating = None
+        embed = build_now_playing_embed(track, rating)
         try:
             await self.text_channel.send(
                 content="🎵 이제 한 곡 틀어 올리옵니다.",
